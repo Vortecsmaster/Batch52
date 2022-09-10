@@ -65,7 +65,6 @@ curSymbol oref tname = scriptCurrencySymbol $ policy oref tname
 --OFF-CHAIN
 type NFTSchema = Endpoint "mint" NFTParams
 
---data NFTOarams = NFTP { npTokenName :: !TokenName, npAddress :: !Address}
 
 data NFTParams = NFTParams { npTokenName :: !TokenName
                            , npAddress   :: !Address
