@@ -26,7 +26,7 @@ import           Plutus.Contract
 import           Plutus.Trace.Emulator  as Emulator
 import           Ledger                    
 import qualified Ledger.Constraints        as Constraints
-import qualified Ledger.Typed.Scripts      as Scripts
+import qualified Ledger.Typed.Scripts      as Scripts  -- Ledger.V1.Utils.
 import           Ledger.Ada                as Ada
 import           Ledger.Value           as Value
 import           Playground.Contract

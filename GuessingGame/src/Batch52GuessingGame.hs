@@ -38,54 +38,46 @@ import Prelude (Semigroup (..))
 import Prelude qualified as Haskell
 import           Text.Printf          (printf)
 
+
 --ON-CHAIN
 
 newtype HashedString = HS BuiltinByteString
-   deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData)
-
+                       deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData)
+--Replace instances derivation with the use of MakeIsData
 PlutusTx.makeLift ''HashedString
 
 newtype ClearString = CS BuiltinByteString
-    deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData)
-
+                      deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData)
+--Replace instances derivation with the use of MakeIsData
 PlutusTx.makeLift ''ClearString
+
+{-# INLINABLE validateGuess #-}
+validateGuess :: HashedString -> ClearString -> ScriptContext -> Bool
+validateGuess hs cs _ = isGoodGuess hs cs
+
+{-# INLINABLE isGoodGuess #-}
+isGoodGuess :: HashedString -> ClearString -> Bool
+isGoodGuess (HS secret) (CS guess) = secret == sha2_256 guess
 
 data Game
 instance Scripts.ValidatorTypes Game where
     type instance RedeemerType Game = ClearString
     type instance DatumType Game = HashedString
 
-{-# INLINABLE validateGuess #-}
-validateGuess :: HashedString -> ClearString -> ScriptContext -> Bool
-validateGuess hs cs _ = isGoodGuess hs cs
- 
-{-# INLINABLE isGoodGuess #-}
-isGoodGuess :: HashedString -> ClearString -> Bool
-isGoodGuess (HS secret) (CS guess') = secret == sha2_256 guess'
-
-gameInstance :: Scripts.TypedValidator Game
-gameInstance = Scripts.mkTypedValidator @Game
-    $$(PlutusTx.compile [|| validateGuess ||])
-    $$(PlutusTx.compile [|| wrap ||]) where
+guessGameValidator :: Scripts.TypedValidator Game
+guessGameValidator = Scripts.mkTypedValidator @Game
+                   $$(PlutusTx.compile [|| validateGuess ||])
+                   $$(PlutusTx.compile [|| wrap ||]) 
+    where
         wrap = Scripts.wrapValidator @HashedString @ClearString
 
---guessInstance :: Scripts.TypedValidator Game
---guessInstance = Scripts.mkTypedValidator @Game
---    $$(PlutusTx.compile [|| isGoodGuess ||])
---    $$(PlutusTx.compile [|| wrap ||]) where
---        wrap = Scripts.wrapValidator @HashedString @ClearString
-
 gameValidator :: Validator
-gameValidator = Scripts.validatorScript gameInstance
+gameValidator = Scripts.validatorScript guessGameValidator
 
 gameAddress :: Address
 gameAddress = Ledger.scriptAddress gameValidator
 
---guessValidator :: Validator
---guessValidator = Scripts.validatorScript guessValidator
-
---guessAddress :: Address
---guessAddress = Ledger.scriptAddress guessValidator
+-- UTILS
 
 hashString :: Haskell.String -> HashedString
 hashString = HS . sha2_256 . toBuiltin . C.pack
@@ -94,6 +86,7 @@ clearString :: Haskell.String -> ClearString
 clearString = CS . toBuiltin . C.pack
 
 -- OFF-CHAIN
+
 data BlindParams = BP 
                    { theSecret :: Haskell.String
                    , value     :: Value
@@ -113,7 +106,7 @@ type GameSchema =
 theBlind :: BlindParams -> Contract w GameSchema Text ()
 theBlind (BP secret blind) =  do
                         let tx         = Constraints.mustPayToTheScript (hashString secret) blind
-                        ledgerTx <- submitTxConstraints gameInstance tx
+                        ledgerTx <- submitTxConstraints guessGameValidator tx
                         void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
                         logInfo @Haskell.String $ "Pay " <> Haskell.show blind <> " to the script"    
                         logInfo @Haskell.String $ printf "Put secret %s" secret 
